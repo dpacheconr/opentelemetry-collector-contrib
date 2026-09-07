@@ -249,6 +249,35 @@ receivers:
 For tracing, all configuration is set under the `webhook` key. The full set
 of exposed configuration values can be found in [`config.go`](./config.go).
 
+#### Configuring Log Collection
+
+Log collection from GitHub Actions workflows is **opt-in and disabled by default**.
+To enable it, set `logs.enabled: true` and provide a GitHub API endpoint:
+
+```yaml
+receivers:
+  github:
+    webhook:
+      endpoint: localhost:19418
+      path: /events
+      health_path: /health
+      logs:
+        enabled: false  # Set to true to enable log collection (default: false)
+        download_logs: false  # Download logs from GitHub API (for future use)
+        parse_severity: false  # Parse severity from log lines (for future use)
+        client_config:
+          endpoint: "https://api.github.com"  # GitHub API endpoint (required if enabled)
+```
+
+For self-managed GitHub instances, override the `endpoint` value:
+
+```yaml
+logs:
+  enabled: true
+  client_config:
+    endpoint: "https://selfmanagedenterpriseserver.com"  # Should NOT include /graphql
+```
+
 ### Configuring Service Name
 
 The `service_name` option in the WebHook configuration can be used to set a

@@ -6,6 +6,7 @@ package githubreceiver // import "github.com/open-telemetry/opentelemetry-collec
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -47,6 +48,14 @@ type WebHook struct {
 	Secret            string                         `mapstructure:"secret"`           // secret for webhook
 	ServiceName       string                         `mapstructure:"service_name"`
 	IncludeSpanEvents bool                           `mapstructure:"include_span_events"` // attach raw webhook event JSON as span events
+	Logs              LogsConfig                     `mapstructure:"logs"`             // configuration for GitHub Actions log collection
+}
+
+type LogsConfig struct {
+	Enabled        bool                       `mapstructure:"enabled"`         // opt-in flag for log collection
+	DownloadLogs   bool                       `mapstructure:"download_logs"`   // download logs from GitHub API
+	ParseSeverity  bool                       `mapstructure:"parse_severity"`  // parse severity from log lines
+	ClientConfig   confighttp.ClientConfig    `mapstructure:",squash"`         // HTTP client configuration for GitHub API calls
 }
 
 type GitHubHeaders struct {
@@ -98,6 +107,11 @@ func (cfg *Config) Validate() error {
 		if _, exists := cfg.WebHook.GitHubHeaders.Fixed[key]; exists {
 			errs = multierr.Append(errs, errGitHubHeader)
 		}
+	}
+
+	// If logs are enabled, ensure endpoint is set
+	if cfg.WebHook.Logs.Enabled && strings.TrimSpace(cfg.WebHook.Logs.ClientConfig.Endpoint) == "" {
+		errs = multierr.Append(errs, fmt.Errorf("logs.enabled requires logs.client_config.endpoint to be set"))
 	}
 
 	return errs

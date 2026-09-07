@@ -31,6 +31,7 @@ const (
 	defaultHealthPath        = "/health"
 	defaultEndpoint          = "localhost:8080"
 	defaultIncludeSpanEvents = false
+	defaultGitHubAPIEndpoint = "https://api.github.com"
 )
 
 var (
@@ -92,6 +93,16 @@ func createDefaultConfig() component.Config {
 			Path:              defaultPath,
 			HealthPath:        defaultHealthPath,
 			IncludeSpanEvents: defaultIncludeSpanEvents,
+			Logs: LogsConfig{
+				Enabled:       false,
+				DownloadLogs:  false,
+				ParseSeverity: false,
+				ClientConfig: func() confighttp.ClientConfig {
+					cc := confighttp.NewDefaultClientConfig()
+					cc.Endpoint = defaultGitHubAPIEndpoint
+					return cc
+				}(),
+			},
 		},
 	}
 }

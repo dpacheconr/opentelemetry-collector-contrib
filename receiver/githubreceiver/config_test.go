@@ -54,6 +54,8 @@ func TestLoadConfig(t *testing.T) {
 	}
 	defaultServerConfig.ReadTimeout = 500 * time.Millisecond
 	defaultServerConfig.WriteTimeout = 500 * time.Millisecond
+	defaultLogsClientConfig := confighttp.NewDefaultClientConfig()
+	defaultLogsClientConfig.Endpoint = "https://api.github.com"
 	defaultConfigGitHubReceiver.(*Config).WebHook = WebHook{
 		ServerConfig: defaultServerConfig,
 		Path:         "some/path",
@@ -72,6 +74,12 @@ func TestLoadConfig(t *testing.T) {
 				"X-Hub-Signature-256": "",
 			},
 		},
+		Logs: LogsConfig{
+			Enabled:       false,
+			DownloadLogs:  false,
+			ParseSeverity: false,
+			ClientConfig:  defaultLogsClientConfig,
+		},
 	}
 
 	assert.Equal(t, defaultConfigGitHubReceiver, r0)
@@ -88,6 +96,8 @@ func TestLoadConfig(t *testing.T) {
 	}
 	expectedServerConfig.ReadTimeout = 500 * time.Millisecond
 	expectedServerConfig.WriteTimeout = 500 * time.Millisecond
+	expectedLogsClientConfig := confighttp.NewDefaultClientConfig()
+	expectedLogsClientConfig.Endpoint = "https://api.github.com"
 	expectedConfig := &Config{
 		ControllerConfig: scraperhelper.ControllerConfig{
 			CollectionInterval: 30 * time.Second,
@@ -114,6 +124,12 @@ func TestLoadConfig(t *testing.T) {
 					"X-GitHub-Hook-ID":    "",
 					"X-Hub-Signature-256": "",
 				},
+			},
+			Logs: LogsConfig{
+				Enabled:       false,
+				DownloadLogs:  false,
+				ParseSeverity: false,
+				ClientConfig:  expectedLogsClientConfig,
 			},
 		},
 	}
@@ -206,6 +222,91 @@ func TestIncludeSpanEventsConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.expected, tt.config.WebHook.IncludeSpanEvents)
+		})
+	}
+}
+
+func TestLogsValidation(t *testing.T) {
+	defaultServerConfig := confighttp.NewDefaultServerConfig()
+	defaultNetAddr := confignet.NewDefaultAddrConfig()
+	defaultNetAddr.Transport = confignet.TransportTypeTCP
+	defaultNetAddr.Endpoint = "localhost:8080"
+	defaultServerConfig.NetAddr = defaultNetAddr
+	defaultServerConfig.ReadTimeout = 500 * time.Millisecond
+	defaultServerConfig.WriteTimeout = 500 * time.Millisecond
+
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "logs disabled does not require endpoint",
+			config: &Config{
+				Scrapers: map[string]internal.Config{
+					githubscraper.TypeStr: (&githubscraper.Factory{}).CreateDefaultConfig(),
+				},
+				WebHook: WebHook{
+					ServerConfig: defaultServerConfig,
+					Logs: LogsConfig{
+						Enabled:       false,
+						DownloadLogs:  false,
+						ParseSeverity: false,
+						ClientConfig:  confighttp.ClientConfig{},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "logs enabled requires endpoint",
+			config: &Config{
+				Scrapers: map[string]internal.Config{
+					githubscraper.TypeStr: (&githubscraper.Factory{}).CreateDefaultConfig(),
+				},
+				WebHook: WebHook{
+					ServerConfig: defaultServerConfig,
+					Logs: LogsConfig{
+						Enabled:       true,
+						DownloadLogs:  false,
+						ParseSeverity: false,
+						ClientConfig:  confighttp.ClientConfig{Endpoint: ""},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "logs.enabled requires logs.client_config.endpoint to be set",
+		},
+		{
+			name: "logs enabled with endpoint passes validation",
+			config: &Config{
+				Scrapers: map[string]internal.Config{
+					githubscraper.TypeStr: (&githubscraper.Factory{}).CreateDefaultConfig(),
+				},
+				WebHook: WebHook{
+					ServerConfig: defaultServerConfig,
+					Logs: LogsConfig{
+						Enabled:       true,
+						DownloadLogs:  false,
+						ParseSeverity: false,
+						ClientConfig:  confighttp.ClientConfig{Endpoint: "https://api.github.com"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
